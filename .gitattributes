@@ -1,0 +1,13 @@
+# 强制 LF：fnOS 生命周期脚本（bash）与 manifest 在 Linux NAS 上解析，CRLF 会导致执行/解析失败。
+* text=auto eol=lf
+*.sh text eol=lf
+manifest text eol=lf
+*.sc text eol=lf
+
+# 二进制：fpk 包与编译产物不转换
+*.fpk binary
+*.fpk2 binary
+*.fpk3 binary
+*.bin binary
+openvpn-client-src/web-new-amd64 binary
+openvpn-client-src/web-new-arm64 binary

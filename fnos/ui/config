@@ -1,0 +1,15 @@
+{
+    ".url": {
+        "openvpn-client.Application": {
+            "title": "OpenVPN 客户端",
+            "desc": "连接任意 OpenVPN 服务器",
+            "icon": "images/icon_{0}.png",
+            "type": "url",
+            "protocol": "",
+            "gatewayPrefix": "/app/openvpn-client",
+            "gatewaySocket": "app.sock",
+            "url": "/app/openvpn-client",
+            "allUsers": true
+        }
+    }
+}

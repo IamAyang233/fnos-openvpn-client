@@ -1,0 +1,15 @@
+# ===== 构建产物（可由 build.sh 重新生成，不入库） =====
+*.fpk
+*.fpk2
+*.fpk3
+
+# ===== openvpn-client-src 内编译产物（源码 main.go/go.mod/templates 入库） =====
+# 默认打包用的是 fnos/app/bin/openvpn-client-web，下面这些仅是备用/测试二进制。
+openvpn-client-src/client-test.bin
+openvpn-client-src/web-new-amd64
+openvpn-client-src/web-new-arm64
+openvpn-client-src/bin/
+
+# ===== 系统/编辑器 =====
+.DS_Store
+*.swp

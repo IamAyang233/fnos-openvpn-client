@@ -1,0 +1,87 @@
+#!/bin/bash
+# openvpn-client 生命周期脚本 —— OpenVPN 客户端（FPK 原生进程）
+#
+# 权限模型（与 openvpn 服务器一致）：
+# - run-as: root（生命周期；openvpn 客户端进程需要 root 建 TUN）
+# - Web 管理后端降权 nobody 运行（上架合规），连接/断开经 sudoers 白名单
+#   调 ovpn-client-helper.sh（root 起 openvpn 客户端）
+# - 开机自启：supervisor 启动后调 service_poststart 检测 status.json auto_connect
+#
+# 二进制：${TRIM_APPDEST}/bin/（openvpn + ovpn-client-helper.sh + supervisor）
+# 数据：${TRIM_PKGVAR}/etc（configs/*.ovpn + status.json + client.log）
+# 端口：18081 仅回环（Web 后端），对外经网关 /app/openvpn-client 转发，无需端口转发 .sc
+
+APP_BIN_DIR="${TRIM_APPDEST}/bin"
+APP_USER="nobody"
+APP_GROUP="nogroup"
+DATA_DIR="${TRIM_PKGVAR}"
+ETC_DIR="${DATA_DIR}/etc"
+CONF_DIR="${ETC_DIR}/configs"
+STATUS_FILE="${ETC_DIR}/status.json"
+
+# 数据目录初始化
+_setup() {
+    mkdir -p "${CONF_DIR}" 2>/dev/null || true
+    [ -f "${STATUS_FILE}" ] || echo '{"name":"","pid":0,"connected":false,"remote":"","local_ip":"","remote_ip":"","auto_connect":false,"started_at":"","updated_at":""}' > "${STATUS_FILE}"
+    chown -R "${APP_USER}:${APP_GROUP}" "${ETC_DIR}" 2>/dev/null || true
+}
+
+# 生成 sudoers 白名单：nobody 免密执行本应用 helper（与服务器版同套路，双路径）
+# 用 TRIM_APPDEST / TRIM_APPNAME 取代硬编码路径，避免改名或框架路径变动后白名单失效（P2 #2）。
+# 双路径覆盖：TRIM_APPDEST 为 /var/apps/{name}/target 软链；/vol*/@appcenter/{name} 为真实安装路径。
+_gen_sudoers() {
+    local SUDOERS="/etc/sudoers.d/${TRIM_APPNAME}"
+    cat > "${SUDOERS}" << EOF
+# openvpn-client: Web 后端(nobody) 特权操作白名单（安装时生成）
+nobody ALL=(root) NOPASSWD: ${TRIM_APPDEST}/bin/ovpn-client-helper.sh, /vol*/@appcenter/${TRIM_APPNAME}/bin/ovpn-client-helper.sh
+EOF
+    chmod 440 "${SUDOERS}" 2>/dev/null || true
+}
+
+service_preinst() {
+    _setup
+    install_log "OpenVPN 客户端已就绪（Web 管理界面端口 18081）。"
+}
+
+service_postinst() {
+    _setup
+    _gen_sudoers
+    install_log "已配置 sudoers 白名单（nobody → 仅限 openvpn-client helper）。"
+}
+
+service_prestart() {
+    _setup
+}
+
+# 开机自启：auto_connect 开启且未连接 → 自动拨号上次配置
+service_poststart() {
+    local name auto pid
+    [ -f "${STATUS_FILE}" ] || return 0
+    name=$(python3 -c "import json;print(json.load(open('${STATUS_FILE}')).get('name',''))" 2>/dev/null)
+    auto=$(python3 -c "import json;print(json.load(open('${STATUS_FILE}')).get('auto_connect',False))" 2>/dev/null)
+    pid=$(python3 -c "import json;print(json.load(open('${STATUS_FILE}')).get('pid',0))" 2>/dev/null)
+    [ "${auto}" = "True" ] || return 0
+    [ -n "${name}" ] || return 0
+    if [ -n "${pid}" ] && [ "${pid}" -gt 0 ] && kill -0 "${pid}" 2>/dev/null; then
+        return 0
+    fi
+    [ -f "${CONF_DIR}/${name}.ovpn" ] || return 0
+    install_log "开机自启：自动连接 ${name} ..."
+    bash "${APP_BIN_DIR}/ovpn-client-helper.sh" connect "${name}" >/dev/null 2>&1 || true
+}
+
+service_preuninst() {
+    # 卸载时停止 openvpn 客户端进程：helper 起的 root 进程不在 supervisor PID 管理内，
+    # 框架 stop 只杀 supervisor/web → openvpn 成孤儿继续跑隧道，必须显式清理。
+    # v0.1.1：同时清理 runuser 起的 web 孙进程（无 trap 转发时卸载后 18081 仍被占，
+    # 浏览器轮询还有响应 → "卸载后仍显示连接中"）。
+    bash "${APP_BIN_DIR}/ovpn-client-helper.sh" disconnect >/dev/null 2>&1 || true
+    pkill -9 -f "openvpn --config.*configs/" >/dev/null 2>&1 || true
+    pkill -9 -f "openvpn-client-web" >/dev/null 2>&1 || true
+    install_log "已停止 openvpn 客户端进程（防孤儿）"
+}
+
+# 原生模式：SERVICE_COMMAND 由框架（common）以 root 后台拉起并管理 PID。
+# supervisor 内部降权启动 Web 后端并维护存活。
+SERVICE_COMMAND="bash ${APP_BIN_DIR}/openvpn-client-supervisor.sh"
+export SERVICE_COMMAND
