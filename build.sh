@@ -9,7 +9,7 @@ cd "$(dirname "$0")"
 
 FNOS_DIR="${FNOS_DIR:-fnos}"
 case "$FNOS_DIR" in *arm*) ARCH_TAG="arm" ;; *) ARCH_TAG="x86" ;; esac
-APPNAME="openvpn-client"; VERSION="0.1.7"
+APPNAME="openvpn-client"; VERSION="0.1.9"
 OUT="${OUT:-${APPNAME}_${VERSION}_${ARCH_TAG}.fpk}"
 [ -d "$FNOS_DIR" ] || { echo "缺少 $FNOS_DIR/"; exit 1; }
 

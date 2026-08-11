@@ -242,6 +242,26 @@
   <div class="err" id="importErr"></div>
 </dialog>
 
-<script src="static/js/index.js?v=0.1.7"></script>
+<!-- 连接失败原因弹窗（v0.1.9） -->
+<dialog class="cfg-dialog" id="failDialog">
+  <div class="cfg-dialog-head">
+    <h3><svg class="icon icon-sm" style="color:var(--danger);vertical-align:-3px;margin-right:4px"><use href="#i-close"/></svg>连接失败</h3>
+    <button class="icon-btn" id="failClose" aria-label="关闭"><svg class="icon"><use href="#i-close"/></svg></button>
+  </div>
+  <div class="field">
+    <div class="fail-head" id="failHeadline">连接失败</div>
+    <div class="fail-reason" id="failReason"></div>
+  </div>
+  <div class="field">
+    <label>相关日志（最近）</label>
+    <pre class="fail-log" id="failLog"></pre>
+  </div>
+  <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:4px">
+    <button class="btn btn-sm" id="failViewLog">查看完整日志</button>
+    <button class="btn btn-primary btn-sm" id="failOk">知道了</button>
+  </div>
+</dialog>
+
+<script src="static/js/index.js?v=0.1.9"></script>
 </body>
 </html>

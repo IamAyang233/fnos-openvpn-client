@@ -110,9 +110,10 @@
   $('importCancelBtn').addEventListener('click', closeDialog);
   $('cfgDialogClose').addEventListener('click', closeDialog);
   // 点击弹窗外（backdrop）关闭
+  var suppressDialogClickUntil = 0;   // 文件选择框关闭后浏览器补发的游离 click 屏蔽截止时间
   $('cfgDialog').addEventListener('click', function (e) {
-    var r = this.getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) this.close();
+    if (Date.now() < suppressDialogClickUntil) return;   // 吃掉“选择文件”后误触的游离 click，避免弹窗消失
+    if (e.target === this) this.close();                 // 仅点击弹窗本身（背景）才关闭，点内部控件不关
   });
   $('importSaveBtn').addEventListener('click', doImport);
 
@@ -310,6 +311,23 @@
     return m.length > 60 ? m.substring(0, 57) + '...' : m;
   }
 
+  // 连接失败原因弹窗（v0.1.9）：展示具体失败原因 + 相关日志，常驻直到用户关闭
+  function showFailDialog(headline, raw, failLog) {
+    var d = $('failDialog');
+    if (!d) return;
+    $('failHeadline').textContent = headline || '连接失败';
+    $('failReason').textContent = raw || '(无具体信息)';
+    $('failLog').textContent = failLog || '(无可显示日志)';
+    if (!d.open) d.showModal();
+  }
+  function closeFailDialog() { var d = $('failDialog'); if (d && d.open) d.close(); }
+  $('failClose').addEventListener('click', closeFailDialog);
+  $('failOk').addEventListener('click', closeFailDialog);
+  $('failViewLog').addEventListener('click', function () {
+    closeFailDialog();
+    showPanel('logs');   // 切到日志页并刷新，便于进一步排查
+  });
+
   function doConnect(name) {
     var btn = $('connectBtn');
     if (btn) { btn.disabled = true; btn.textContent = '连接中...'; }
@@ -317,8 +335,11 @@
     startFastPoll();   // 立即 2 秒快轮询，状态实时刷新（不依赖 fetch 返回）
     api.post('/connect', { name: name }).then(function (d) {
       if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="icon icon-sm"><use href="#i-bolt"/></svg>连接'; }
-      if (d.error) { toast(friendlyError(d.error)); }
-      else { toast('连接成功'); }
+      if (d.error) {
+        // 弹窗展示具体失败原因（raw = 去掉“连接失败: ”前缀后的真实 OpenVPN 错误行）
+        var raw = String(d.error).replace(/^连接失败:\s*/, '');
+        showFailDialog(friendlyError(d.error), raw, d.fail_log);
+      } else { toast('连接成功'); }
       refresh();
     });
   }
@@ -350,7 +371,11 @@
     });
   }
   /* ---------- .ovpn 文件导入（选择 / 拖拽） ---------- */
-  $('pickFileBtn').addEventListener('click', function () { $('inpFile').click(); });
+  $('pickFileBtn').addEventListener('click', function () {
+    // 打开系统文件框；关闭后会补发一次游离 click（坐标落在弹窗外）→ 屏蔽一小段时间，避免误关弹窗
+    suppressDialogClickUntil = Date.now() + 1500;
+    $('inpFile').click();
+  });
   $('inpFile').addEventListener('change', function () {
     var f = this.files && this.files[0];
     if (!f) return;

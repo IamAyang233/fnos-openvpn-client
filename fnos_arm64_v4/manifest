@@ -1,8 +1,8 @@
 appname         = openvpn-client
-version         = 0.1.7
+version         = 0.1.8
 display_name    = OpenVPN 客户端
 desc            = <b>OpenVPN 客户端</b> 让飞牛私有云 (fnOS) 作为 VPN 客户端连接任意 OpenVPN 服务器（公司 VPN、异地组网、服务商 VPN 等）。<br><br><b>功能：</b><br>- 导入 .ovpn 配置（粘贴文本，支持证书内嵌），可保存多套配置切换<br>- 一键连接 / 断开，实时状态（服务器地址、隧道 IP、连接时间）<br>- 连接日志查看，开机自启（NAS 重启自动拨号）<br>- Web 管理界面（经系统门户访问）<br>- 数据持久化到应用数据卷，升级或重装不丢失<br><br><b>适用前提：</b><br>- 目标 OpenVPN 服务器可达（公网 IP / 域名 / 内网）<br>- 需要 root 启动以创建 TUN 设备（与 openvpn 服务器应用相同的官方许可场景）<br><br><b>来源与许可：</b>OpenVPN 为 GPLv2（Community Edition）。本 FPK 由 Panda（www.aykeji.cn）打包发布。<br><b>项目仓库：</b>https://github.com/IamAyang233/fnos-openvpn
-changelog       = 【v0.1.7】断线自动重连（设置页开关，可配置最大重试次数，默认 30s 退避；主动断开不触发）；设置与连接运行态分离持久化（修复开关被连接/断开冲掉）；版本号统一升级至 0.1.7。【v0.1.6】浏览器缓存修复（前端 JS 加版本号 query string）；连接错误提示友好化（AUTH_FAILED 等映射为中文）；IPv6 隧道地址显示（双栈模式）。【v0.1.5】统一网关模式（复用 NAS 登录态，不再暴露端口）；卸载向导（可选保留数据）；去除硬编码路径。【v0.1.0】首个版本：导入 .ovpn 配置并连接 OpenVPN 服务器；多配置管理（导入/删除/切换）；连接状态实时显示（隧道 IP/服务器/时长）；连接日志；开机自启。
+changelog       = 【v0.1.8】修复导入配置弹窗在“选择 .ovpn 文件”后消失的问题（浏览器文件选择框关闭后补发的游离 click 被误判为点击弹窗外而关闭）；前端 JS 缓存号升级至 0.1.8。【v0.1.7】断线自动重连（设置页开关，可配置最大重试次数，默认 30s 退避；主动断开不触发）；设置与连接运行态分离持久化（修复开关被连接/断开冲掉）；版本号统一升级至 0.1.7。【v0.1.6】浏览器缓存修复（前端 JS 加版本号 query string）；连接错误提示友好化（AUTH_FAILED 等映射为中文）；IPv6 隧道地址显示（双栈模式）。【v0.1.5】统一网关模式（复用 NAS 登录态，不再暴露端口）；卸载向导（可选保留数据）；去除硬编码路径。【v0.1.0】首个版本：导入 .ovpn 配置并连接 OpenVPN 服务器；多配置管理（导入/删除/切换）；连接状态实时显示（隧道 IP/服务器/时长）；连接日志；开机自启。
 platform        = arm
 source          = thirdparty
 maintainer      = Panda
