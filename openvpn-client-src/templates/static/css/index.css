@@ -377,10 +377,6 @@
 .cfg-dialog .field{margin-bottom:12px}
 .cfg-dialog textarea.input{resize:vertical;min-height:150px}
 
-/* ============ 连接失败原因弹窗（v0.1.9） ============ */
-.fail-head{font-size:14px;font-weight:600;color:var(--danger);margin-bottom:8px}
-.fail-reason{font-size:13px;color:var(--text);background:var(--danger-soft);border:1px solid var(--border);border-left:3px solid var(--danger);border-radius:8px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;word-break:break-all;line-height:1.6;white-space:pre-wrap;margin:0}
-.fail-log{background:#101426;color:#c4cbe0;border-radius:var(--radius-sm);padding:10px;font-family:ui-monospace,Consolas,monospace;font-size:11px;line-height:1.7;overflow:auto;white-space:pre-wrap;max-height:220px;margin:0}
 .icon-btn{background:none;border:none;cursor:pointer;color:var(--text-2);padding:4px;border-radius:6px;display:flex}
 .icon-btn:hover{background:var(--surface-2);color:var(--text)}
 

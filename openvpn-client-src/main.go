@@ -26,7 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var version = "0.1.9"
+var version = "0.1.8"
 
 //go:embed templates
 var embedFS embed.FS
@@ -390,9 +390,7 @@ func apiConnect(c *gin.Context) {
 		if reason == "" {
 			reason = "连接未建立（未知原因，请查看日志）"
 		}
-		// v0.1.9：附带日志尾部，前端失败弹窗展示具体原因 + 上下文
-		failLog := strings.Join(readTail(logFP, 15), "\n")
-		c.JSON(500, gin.H{"error": "连接失败: " + reason, "fail_log": failLog})
+		c.JSON(500, gin.H{"error": "连接失败: " + reason})
 		return
 	}
 	// 标记期望保持连接（供自动重连 watcher 使用），并重置失败计数

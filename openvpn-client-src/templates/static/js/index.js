@@ -311,23 +311,6 @@
     return m.length > 60 ? m.substring(0, 57) + '...' : m;
   }
 
-  // 连接失败原因弹窗（v0.1.9）：展示具体失败原因 + 相关日志，常驻直到用户关闭
-  function showFailDialog(headline, raw, failLog) {
-    var d = $('failDialog');
-    if (!d) return;
-    $('failHeadline').textContent = headline || '连接失败';
-    $('failReason').textContent = raw || '(无具体信息)';
-    $('failLog').textContent = failLog || '(无可显示日志)';
-    if (!d.open) d.showModal();
-  }
-  function closeFailDialog() { var d = $('failDialog'); if (d && d.open) d.close(); }
-  $('failClose').addEventListener('click', closeFailDialog);
-  $('failOk').addEventListener('click', closeFailDialog);
-  $('failViewLog').addEventListener('click', function () {
-    closeFailDialog();
-    showPanel('logs');   // 切到日志页并刷新，便于进一步排查
-  });
-
   function doConnect(name) {
     var btn = $('connectBtn');
     if (btn) { btn.disabled = true; btn.textContent = '连接中...'; }
@@ -336,9 +319,7 @@
     api.post('/connect', { name: name }).then(function (d) {
       if (btn) { btn.disabled = false; btn.innerHTML = '<svg class="icon icon-sm"><use href="#i-bolt"/></svg>连接'; }
       if (d.error) {
-        // 弹窗展示具体失败原因（raw = 去掉“连接失败: ”前缀后的真实 OpenVPN 错误行）
-        var raw = String(d.error).replace(/^连接失败:\s*/, '');
-        showFailDialog(friendlyError(d.error), raw, d.fail_log);
+        toast(friendlyError(d.error));
       } else { toast('连接成功'); }
       refresh();
     });

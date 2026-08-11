@@ -111,9 +111,7 @@ connect)
     # 仅进程存活/tun0 本地配置 ≠ 已连接（纯 IPv6 不可达时进程也在跑但永远连不上）。
     # v0.1.2：快速失败——日志出现明确错误（TCP 拒绝/无路由/TLS/认证失败/DNS 解析失败）立即判定，
     # 避免连不上的服务器拖满 20 秒判据窗口（UI 一直"连接中"）。
-    # v0.1.9：拓宽失败识别，覆盖证书/选项/握手超时/被 reset/解析失败等真实错误模式，
-    # 避免连不上的服务器只回退成笼统的“连接超时”。
-    FAIL_PAT='TCP: connect.*failed|Connection refused|No route to host|Network is unreachable|TLS Error|AUTH_FAILED|RESOLVE: Cannot|Cannot resolve host|Could not determine IPv4/IPv6 protocol|Name or service not known|Options error|VERIFY ERROR|certificate .*(expired|error|verify failed)|TLS handshake failed|TLS key negotiation failed|Connection reset by peer|Exiting due to fatal error'
+    FAIL_PAT='TCP: connect.*failed|Connection refused|No route to host|Network is unreachable|TLS Error|AUTH_FAILED|Resolv.*failed|Could not determine IPv4/IPv6 protocol|Name or service not known'
     connected=false
     fail_reason=""
     i=0
@@ -145,14 +143,8 @@ connect)
         kill -9 "${pid}" 2>/dev/null || true
     fi
     write_status "${name}" "0" "false"
-    # v0.1.9：兜底——FAIL_PAT 未命中时，抓日志里最后一条“像错误”的行作为具体原因展示，
-    # 避免用户只看到笼统提示。仍为空才回退成通用文案。
-    if [ -z "${fail_reason}" ]; then
-        fail_reason=$(grep -iE 'error|fail|refused|expired|invalid|unable|cannot|denied|timeout|reset|verify|no route|unreachable' "${LOG_FILE}" 2>/dev/null \
-            | grep -viE 'Initialization Sequence|NOTE:|there are no TAP|WARNING: this configuration|WARNING: OpenVPN' | tail -1)
-    fi
-    # 不加"连接失败:"前缀——apiConnect 已包装，避免弹窗文案重复
-    echo "${fail_reason:-连接未建立（未知原因，请查看日志）}"
+    # 不加"连接失败:"前缀——apiConnect 已包装，避免 toast 文案重复
+    echo "${fail_reason:-连接未建立（请查看日志）}"
     exit 1
     ;;
 disconnect)
