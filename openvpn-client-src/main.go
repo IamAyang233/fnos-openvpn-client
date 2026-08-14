@@ -8,7 +8,6 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
-	"regexp"
 	"fmt"
 	"io"
 	"io/fs"
@@ -17,6 +16,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -26,7 +26,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var version = "0.1.8"
+var version = "0.1.10"
 
 //go:embed templates
 var embedFS embed.FS
@@ -68,22 +68,22 @@ func initPaths() {
 // ---------- 状态读写 ----------
 
 type ConnStatus struct {
-	Name        string `json:"name"`        // 当前配置名（空=未连接）
-	PID         int    `json:"pid"`         // openvpn 客户端进程 PID
-	Connected   bool   `json:"connected"`   // 是否已连接（隧道建立）
-	Remote      string `json:"remote"`      // 服务器地址
-	LocalIP     string `json:"local_ip"`    // 隧道本端 IP
-	RemoteIP    string `json:"remote_ip"`   // 隧道对端 IP
+	Name          string `json:"name"`           // 当前配置名（空=未连接）
+	PID           int    `json:"pid"`            // openvpn 客户端进程 PID
+	Connected     bool   `json:"connected"`      // 是否已连接（隧道建立）
+	Remote        string `json:"remote"`         // 服务器地址
+	LocalIP       string `json:"local_ip"`       // 隧道本端 IP
+	RemoteIP      string `json:"remote_ip"`      // 隧道对端 IP
 	AutoConnect   bool   `json:"auto_connect"`   // 开机自启
-	WantConnected  bool   `json:"want_connected"` // 当前期望保持连接（连接成功=true，主动断开=false）
-	AutoReconnect  bool   `json:"auto_reconnect"` // 断线自动重连开关
-	ReconnectMax   int    `json:"reconnect_max"`  // 最大重连次数（0=无限）
-	StartedAt      string `json:"started_at"`  // 启动时间
-	UpdatedAt      string `json:"updated_at"`  // 状态更新
-	RxBytes        int64  `json:"rx_bytes"`    // 下行累计字节（TUN/TAP read）
-	TxBytes        int64  `json:"tx_bytes"`    // 上行累计字节（TUN/TAP write）
-	RxRate         int64  `json:"rx_rate"`     // 下行速率 bytes/s
-	TxRate         int64  `json:"tx_rate"`     // 上行速率 bytes/s
+	WantConnected bool   `json:"want_connected"` // 当前期望保持连接（连接成功=true，主动断开=false）
+	AutoReconnect bool   `json:"auto_reconnect"` // 断线自动重连开关
+	ReconnectMax  int    `json:"reconnect_max"`  // 最大重连次数（0=无限）
+	StartedAt     string `json:"started_at"`     // 启动时间
+	UpdatedAt     string `json:"updated_at"`     // 状态更新
+	RxBytes       int64  `json:"rx_bytes"`       // 下行累计字节（TUN/TAP read）
+	TxBytes       int64  `json:"tx_bytes"`       // 上行累计字节（TUN/TAP write）
+	RxRate        int64  `json:"rx_rate"`        // 下行速率 bytes/s
+	TxRate        int64  `json:"tx_rate"`        // 上行速率 bytes/s
 }
 
 // 流量速率差分缓存（web 进程常驻内存，按轮询间隔算速率）
@@ -101,6 +101,11 @@ type TrafficSample struct {
 
 // trafficHistory 滑动窗口（最近 ~5 分钟，按前端轮询间隔采样）
 var trafficHistory []TrafficSample
+
+// trafficMu 保护 trafficHistory / lastRx / lastTx / lastStatTs：
+// enrichTraffic 会被 apiBootstrap 与 apiStatus 两个并发请求同时调用，
+// 无锁并发 append/reslice 是真实 data race（go -race 会报，高并发可能 panic）。
+var trafficMu sync.Mutex
 
 const trafficMaxSamples = 300
 
@@ -221,11 +226,11 @@ func apiBootstrap(c *gin.Context) {
 		}
 	}
 	c.JSON(200, gin.H{
-		"version":      version,
-		"status":       st,
-		"traffic":      trafficHistory,
-		"configs":      names,
-		"auto_connect": st.AutoConnect,
+		"version":        version,
+		"status":         st,
+		"traffic":        snapshotTraffic(),
+		"configs":        names,
+		"auto_connect":   st.AutoConnect,
 		"auto_reconnect": st.AutoReconnect,
 		"reconnect_max":  st.ReconnectMax,
 	})
@@ -363,6 +368,8 @@ func apiDelete(c *gin.Context) {
 		return
 	}
 	os.Remove(filepath.Join(confDir, name+".ovpn"))
+	// 连带删除凭据文件（name 经白名单校验，不含 / 或 ..，无路径穿越风险）
+	os.Remove(filepath.Join(confDir, name+".auth"))
 	c.JSON(200, gin.H{"ok": true})
 }
 
@@ -422,6 +429,8 @@ func apiDisconnect(c *gin.Context) {
 // enrichTraffic 读取 openvpn --status 文件，填充累计字节并差分计算速率。
 // 仅 connected 时有效；断开或重连（累计值回落）时速率归零。
 func enrichTraffic(st *ConnStatus) {
+	trafficMu.Lock()
+	defer trafficMu.Unlock()
 	if !st.Connected {
 		st.RxBytes, st.TxBytes, st.RxRate, st.TxRate = 0, 0, 0, 0
 		lastRx, lastTx, lastStatTs = 0, 0, time.Time{}
@@ -459,6 +468,17 @@ func enrichTraffic(st *ConnStatus) {
 	}
 }
 
+// snapshotTraffic 在锁内拷贝当前流量窗口，供 handler 序列化返回。
+// 不可直接返回全局 trafficHistory：enrichTraffic 会在另一请求中并发 append/reslice，
+// 序列化读到的 slice header 可能正在被改写（data race）。
+func snapshotTraffic() []TrafficSample {
+	trafficMu.Lock()
+	defer trafficMu.Unlock()
+	s := make([]TrafficSample, len(trafficHistory))
+	copy(s, trafficHistory)
+	return s
+}
+
 func apiStatus(c *gin.Context) {
 	st := loadStatus()
 	applySettings(&st)
@@ -470,7 +490,7 @@ func apiStatus(c *gin.Context) {
 		saveStatus(st)
 	}
 	enrichTraffic(&st)
-	c.JSON(200, gin.H{"status": st, "traffic": trafficHistory})
+	c.JSON(200, gin.H{"status": st, "traffic": snapshotTraffic()})
 }
 
 func apiLog(c *gin.Context) {
@@ -496,7 +516,7 @@ func apiAuto(c *gin.Context) {
 	var req struct {
 		Enable        bool `json:"enable"`
 		AutoReconnect bool `json:"auto_reconnect"`
-		ReconnectMax int  `json:"reconnect_max"`
+		ReconnectMax  int  `json:"reconnect_max"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": "参数错误"})

@@ -322,12 +322,14 @@
         toast(friendlyError(d.error));
       } else { toast('连接成功'); }
       refresh();
+      refreshLog();   // 连接动作后立即刷新日志（拨号过程是日志最活跃时刻）
     });
   }
   function doDisconnect() {
     api.post('/disconnect').then(function (d) {
       if (d.error) { toast(d.error); return; }
       refresh();
+      refreshLog();   // 断开后立即刷新日志
     });
   }
   function doEdit(name) {

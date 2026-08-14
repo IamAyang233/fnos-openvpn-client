@@ -5,7 +5,7 @@
 # 注意：sudo 会清空环境变量（env_reset），路径全部自推断，不依赖 TRIM_* 环境变量。
 
 # 自推断数据目录（与 ovpn-helper.sh 同思路）：
-# 优先级：显式环境变量 > /var/apps/openvpn-client/var symlink（官方）> pwd -P 推导 > 兜底 vol2
+# 优先级：显式环境变量 > /var/apps/openvpn-client/var symlink（官方）> pwd -P 推导 > 扫描各卷兜底（不写死 vol）
 APP_BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 APP_LIB_DIR="$(cd "${APP_BIN_DIR}/../lib" && pwd)"
 OVPN_BIN="${APP_BIN_DIR}/openvpn"
@@ -18,12 +18,22 @@ if [ -n "${TRIM_PKGVAR:-}" ]; then
 elif [ -d "/var/apps/openvpn-client/var" ]; then
     OVPN_DATA="/var/apps/openvpn-client/var/etc"
 else
+    # sudo 的 env_reset 会清空 TRIM_*；从脚本真实路径推导卷号，兼容 vol1/vol2/vol3…（不再写死 vol2）。
     APP_REAL="$(cd "${APP_BIN_DIR}/.." && pwd -P 2>/dev/null)"
     VOL_NUM="$(echo "${APP_REAL}" | sed -n 's|^/vol\([0-9][0-9]*\)/.*|\1|p')"
+    if [ -z "${VOL_NUM}" ]; then
+        # 真实路径未落在 /volN/ 下时，扫描所有卷定位本应用数据目录
+        for v in /vol*/@appdata/openvpn-client; do
+            [ -d "${v}" ] || continue
+            VOL_NUM="$(echo "${v}" | sed -n 's|^/vol\([0-9][0-9]*\)/.*|\1|p')"
+            break
+        done
+    fi
     if [ -n "${VOL_NUM}" ] && [ -d "/vol${VOL_NUM}/@appdata/openvpn-client" ]; then
         OVPN_DATA="/vol${VOL_NUM}/@appdata/openvpn-client/etc"
     else
-        OVPN_DATA="/vol2/@appdata/openvpn-client/etc"
+        # 兜底：默认主数据卷 vol1（不再写死 vol2）
+        OVPN_DATA="/vol1/@appdata/openvpn-client/etc"
     fi
 fi
 
@@ -98,6 +108,12 @@ connect)
         old_pid=$(python3 -c "import json;print(json.load(open('${STATUS_FILE}')).get('pid',0))" 2>/dev/null)
         [ -n "${old_pid}" ] && [ "${old_pid}" -gt 0 ] && kill "${old_pid}" 2>/dev/null
     fi
+    # 日志/状态文件必须 nobody 可读：web 后端以 nobody 运行，root:600 会导致日志页永远读不到。
+    # 先创建并改属主，openvpn（root）随后 --log 覆盖写同一 inode，属主保持 nobody。
+    : > "${LOG_FILE}" 2>/dev/null || touch "${LOG_FILE}"
+    chown nobody:nogroup "${LOG_FILE}" 2>/dev/null || true
+    : > "${OVPN_DATA}/openvpn-status.log" 2>/dev/null || touch "${OVPN_DATA}/openvpn-status.log"
+    chown nobody:nogroup "${OVPN_DATA}/openvpn-status.log" 2>/dev/null || true
     # 启动客户端（--daemon 后台 + 写日志 + status 文件；--log 覆盖保证判据 grep 本次启动日志）
     # TUN 设备由 openvpn 自动创建（mknod 受限，不能手动建）
     "${OVPN_BIN}" --config "${conf}" \
