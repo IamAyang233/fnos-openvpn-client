@@ -13,3 +13,8 @@ openvpn-client-src/bin/
 # ===== 系统/编辑器 =====
 .DS_Store
 *.swp
+
+# 图标生成调试脚本（非源码，本地保留，不入仓库）
+analyze_icons.py
+gen_client_icon.py
+icon_preview.png
