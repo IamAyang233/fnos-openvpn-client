@@ -18,3 +18,6 @@ openvpn-client-src/bin/
 analyze_icons.py
 gen_client_icon.py
 icon_preview.png
+
+# NAS 部署/诊断临时脚本（非源码，本地保留，不入仓库）
+nas_*.py
