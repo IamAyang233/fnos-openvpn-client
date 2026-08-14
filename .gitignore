@@ -21,3 +21,6 @@ icon_preview.png
 
 # NAS 部署/诊断临时脚本（非源码，本地保留，不入仓库）
 nas_*.py
+
+# Windows 构建产物（非源码，本地保留，不入仓库）
+openvpn-client-src/*.exe
